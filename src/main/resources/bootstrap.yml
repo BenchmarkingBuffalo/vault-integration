@@ -1,0 +1,9 @@
+spring:
+  cloud:
+    vault:
+      uri: http://localhost:8200
+      token: vault-plaintext-root-token
+      kv:
+        enabled: true
+        backend: secret
+        default-context: application
