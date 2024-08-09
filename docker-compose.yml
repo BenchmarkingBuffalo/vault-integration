@@ -1,4 +1,4 @@
-version: '3.1'
+version: '3.8'
 services:
   db:
     image: mysql
@@ -7,3 +7,23 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: my-secret-pw
       MYSQL_DATABASE: vault-integration-db
+    networks:
+      - vault-network
+
+  vault:
+    image: hashicorp/vault:latest
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_ADDR: "http://0.0.0.0:8200"
+      VAULT_DEV_ROOT_TOKEN_ID: "vault-plaintext-root-token"
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - vault-network
+
+networks:
+  vault-network:
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
