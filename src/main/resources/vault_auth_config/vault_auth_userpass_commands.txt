@@ -1,0 +1,50 @@
+Auth type username/password:
+------------------------------------
+1. enable auth type
+vault auth enable userpass
+
+2. check auth list
+vault auth list
+
+3. create username pwd
+
+vault write auth/userpass/users/krn password=abcd
+
+4. read user
+vault read auth/userpass/users/krn
+
+5. create policy as root policy.
+vault policy write root_policy root_policy.hcl
+
+6. create token for the policy
+vault token create -policy="root_policy"
+
+7. create/asign policy to user
+vault write auth/userpass/users/USERNAME password=PASSWORD policies=root_policy
+
+8. login with user/pwd and get the token from response and use it in appication in place of root token.
+vault login -method=userpass username=krn password=abcd
+
+Configure using UI:
+------------------
+login to vault server console using root token
+-> click on policies -> create acl policy
+-> enter name. ex: "root_policy"
+-> enter below text to create default root policy
+path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}
+-> click on create policy
+
+->click on access -> authentication methods -> click on enable new method
+-> select username & password under Generic
+-> create path userpass(default)
+-> then click on userpass
+-> create user
+-> enter username and password
+-> expand Tokens
+-> enter created token policy name. ex: root_policy
+-> Save
+
+now log out and log in with the newly created username & pwd
+then click on profile icon and copy token and use that token in application.prop file instead of root token.
