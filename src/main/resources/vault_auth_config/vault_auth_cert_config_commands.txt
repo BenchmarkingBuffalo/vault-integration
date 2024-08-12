@@ -1,0 +1,85 @@
+1. Enable pki secrets engine
+
+vault secrets enable pki
+
+2. Set maximum TTL to 87600 hours
+
+vault secrets tune --max-lease-ttl=87600h pki
+
+3. Generate a root certificate and save it
+
+vault write -field=certificate pki/root/generate/internal issuing_certificates="http://localhost:8200/v1/pki/ca" crl_distribution_points="http://localhost:8200/v1/pki/crl"
+
+4.Enable pki_int path in pki
+
+vault secrets enable -path=pki_int pki
+
+5. Set TTL of 43800h in the new path
+
+vault secrets tune -max-lease-ttl=43800h pki_int
+
+6. Generate an intermediate cert and save to CSR
+
+vault write -format=json pki_int/intermediate/generate/internal common_name="myvault.com Intermediate Authority" | jq -r '.data.csr' > pki_intermediate.csr
+ or use below
+vault write -format=json pki_int/intermediate/generate/internal common_name="myvault.com Intermediate Authority" > temp.json
+jq -r ".data.csr" temp.json > pki_intermediate.csr
+
+7. Sign the intermediate cert with the root certificate
+
+vault write -format=json pki/root/sign-intermediate csr=@pki_intermediate.csr format=pem_bundle ttl="43800h" > temp2.json
+jq -r ".data.certificate" temp2.json > intermediate.cert.pem
+
+8. Once signed and generated import back into Vault
+
+vault write pki_int/intermediate/set-signed certificate=@intermediate.cert.pem
+
+9. Create a role for the domain in Vault that allows subdomains with a max TTL of 30 days
+
+vault write pki_int/roles/vault-dot-com allowed_domains="vault" allow_subdomains=true max_ttl="720h"
+
+10. Generate certificates using the role created
+
+Note: Replace {{domain}} with your domain name and {{vault.domain.com}} with your full subdomain
+
+vault write pki_int/issue/vault-dot-com common_name="localhost"
+
+Enable Cert Auth And Attaching A Policy
+--------------------------------------
+1. Create a role for the cert auth and a place to store them
+
+vault write pki_int/roles/vault-cert allow_any_name=true max_ttl="720h" generate_lease=true
+
+2. Create an hcl file to use for your policy
+
+sudo vim vault-cert.hcl
+
+3. Next write the policy for the vault cert
+
+vault policy write vault-cert vault-cert.hcl
+
+4.Write and sign the current certs to be usable for authentication with Vault
+
+vault write -format=json pki_int/issue/vault-cert common_name="vault-cert" | tee \
+
+>(jq -r .data.certificate > vault_ca.pem) \
+
+>(jq -r .data.issuing_ca > vault_issuing_ca.pem) \
+
+>(jq -r .data.private_key > vault_privkey.pem)
+
+5. Enable cert as an authentication method
+
+vault auth enable cert
+
+6. Write the certificate to vault as a cert you can use for auth
+
+vault write auth/cert/certs/vault-cert display_name=vault_cert policies=vault-cert certificate=@vault_ca.pem
+
+7. Test login using those certs with the following command
+
+vault login -method=cert -client-cert=vault_ca.pem -client-key=vault_privkey.pem name=vault-cert
+
+8. We're going to retrieve our secret in a json format
+
+vault kv get -format=json secret/sql/ | jq
